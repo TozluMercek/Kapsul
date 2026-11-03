@@ -4,6 +4,11 @@
 # For more details, see
 #   https://d.android.com/r/tools/r8/keep-rules
 
+# Kotlin's multi-file facade parts (e.g. kotlin.text.StringsKt__IndentKt) extend each other and
+# are package-private. R8 repackaged one of them out of kotlin.text, which crashed the release
+# build at startup with IllegalAccessError. Keep their names/packages; shrinking still applies.
+-keep,allowshrinking,allowoptimization class kotlin.**Kt__* { *; }
+
 # If your project uses WebView with JS, uncomment the following
 # and specify the fully qualified class name to the JavaScript interface
 # class:
