@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">Kapsül</string>
+    <string name="shortcut_quick_note">Hızlı not</string>
+    <string name="shortcut_quick_note_long">Hızlı not bırak</string>
+    <string name="shortcut_voice_note">Sesli not</string>
+    <string name="shortcut_voice_note_long">Sesli not kaydet</string>
+    <string name="shortcut_ask">Hafızana sor</string>
+    <string name="shortcut_ask_long">Hafızana bir soru sor</string>
+</resources>

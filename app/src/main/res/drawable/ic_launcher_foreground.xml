@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Kapsül icon: an hourglass (a time capsule for memories). Kept inside the 66dp safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Glass bulbs -->
+    <path
+        android:fillColor="#40DDF1F7"
+        android:strokeColor="#CCEAF6FA"
+        android:strokeWidth="1.2"
+        android:pathData="M40.5,33 H67.5 C67.5,44 58.5,49 55.6,54 C58.5,59 67.5,64 67.5,75 H40.5 C40.5,64 49.5,59 52.4,54 C49.5,49 40.5,44 40.5,33 Z" />
+
+    <!-- Sand: top, falling stream, bottom pile -->
+    <path
+        android:fillColor="#FFF5A65B"
+        android:pathData="M44.5,40 H63.5 C62,46 57.5,50 54,53.2 C50.5,50 46,46 44.5,40 Z" />
+    <path
+        android:fillColor="#FFF5A65B"
+        android:pathData="M53.4,53 h1.2 v16 h-1.2 z" />
+    <path
+        android:fillColor="#FFF08A4B"
+        android:pathData="M42.2,74.6 C44,68.6 49.5,66.2 54,65.8 C58.5,66.2 64,68.6 65.8,74.6 Z" />
+
+    <!-- Glass highlight -->
+    <path
+        android:strokeColor="#B3FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeWidth="1.4"
+        android:pathData="M44,36.5 C44.4,41.5 47.5,45 50.5,48" />
+
+    <!-- Frame: posts and caps -->
+    <path
+        android:fillColor="#FFD9A13B"
+        android:pathData="M35.5,32.5 h2.6 v43 h-2.6 z M69.9,32.5 h2.6 v43 h-2.6 z" />
+    <path
+        android:fillColor="#FFF7C35C"
+        android:pathData="M34.5,27.5 h39 a2.5,2.5 0,0 1,2.5 2.5 v1 a2.5,2.5 0,0 1,-2.5 2.5 h-39 a2.5,2.5 0,0 1,-2.5 -2.5 v-1 a2.5,2.5 0,0 1,2.5 -2.5 z" />
+    <path
+        android:fillColor="#FFF7C35C"
+        android:pathData="M34.5,74.5 h39 a2.5,2.5 0,0 1,2.5 2.5 v1 a2.5,2.5 0,0 1,-2.5 2.5 h-39 a2.5,2.5 0,0 1,-2.5 -2.5 v-1 a2.5,2.5 0,0 1,2.5 -2.5 z" />
+
+    <!-- A small spark: memories kept bright -->
+    <path
+        android:fillColor="#FFFFE9B0"
+        android:pathData="M78,40 Q78.6,43.4 82,44 Q78.6,44.6 78,48 Q77.4,44.6 74,44 Q77.4,43.4 78,40 Z" />
+</vector>
