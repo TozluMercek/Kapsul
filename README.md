@@ -12,6 +12,7 @@
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.2-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
 [![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-Material%203%20Expressive-4285F4?logo=jetpackcompose&logoColor=white)](https://m3.material.io)
 [![İnternet izni yok](https://img.shields.io/badge/İnternet%20izni-yok-00897B)](#gizlilik)
+[![Lisans: MIT](https://img.shields.io/badge/lisans-MIT-blue)](LICENSE)
 [![Son sürüm](https://img.shields.io/github/v/release/TozluMercek/Kapsul?label=s%C3%BCr%C3%BCm&color=F5A65B)](https://github.com/TozluMercek/Kapsul/releases/latest)
 
 ### [⬇️ APK'yı indir](https://github.com/TozluMercek/Kapsul/releases/latest)
@@ -196,3 +197,7 @@ keyPassword=…
 ## Teşekkürler
 
 - Yazı tipi: **Google Sans Flex** — SIL Open Font License 1.1 ([lisans metni](app/src/main/assets/licenses/GoogleSansFlex-OFL.txt)).
+
+## Lisans
+
+Kapsül [MIT Lisansı](LICENSE) ile dağıtılır. Google Sans Flex yazı tipi kendi lisansına (SIL OFL 1.1) tabidir.
