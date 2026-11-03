@@ -53,6 +53,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.Alarm
+import androidx.compose.material.icons.outlined.NotificationsActive
+import com.example.kapsul.data.ReminderMode
+import com.example.kapsul.data.ReminderRepeat
+import com.example.kapsul.ui.reminders.reminderLabel
+import androidx.compose.material.icons.outlined.HourglassTop
+import androidx.compose.material.icons.outlined.Lock
+import com.example.kapsul.ui.privacy.longDate
 import com.example.kapsul.ui.background.NoteBackground
 import com.example.kapsul.ui.background.rememberBackgroundColors
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -173,7 +180,6 @@ private fun NoteCardBody(note: Note, attachments: List<Attachment>) {
                 NoteSource.TEXT -> null
             }
             if (note.pinned) SmallIcon(Icons.Outlined.PushPin)
-            if (note.reminderAt != null) SmallIcon(Icons.Outlined.Alarm)
             if (sourceIcon != null) SmallIcon(sourceIcon)
             Text(
                 relativeDate(note.updatedAt),
@@ -187,17 +193,28 @@ private fun NoteCardBody(note: Note, attachments: List<Attachment>) {
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
-        val preview = plainPreview(note.body, note.title)
-        if (preview.isNotBlank()) {
-            Text(
-                preview,
-                style = MaterialTheme.typography.bodyMedium,
-                color = LocalContentColor.current.copy(alpha = 0.8f),
-                maxLines = 7,
-                overflow = TextOverflow.Ellipsis,
+        note.reminderAt?.let { at -> ReminderBadge(at, ReminderMode.from(note.reminderMode), ReminderRepeat.from(note.reminderRepeat)) }
+        when {
+            // Locked and sealed notes never show their content on the grid.
+            note.isSealed -> PrivateLine(
+                Icons.Outlined.HourglassTop,
+                "${longDate(note.capsuleUntil ?: 0L)} tarihinde açılır · ${daysUntil(note.capsuleUntil ?: 0L)} gün",
             )
+            note.locked -> PrivateLine(Icons.Outlined.Lock, "Kilitli not")
+            else -> {
+                val preview = plainPreview(note.body, note.title)
+                if (preview.isNotBlank()) {
+                    Text(
+                        preview,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = LocalContentColor.current.copy(alpha = 0.8f),
+                        maxLines = 7,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                AttachmentBadges(attachments)
+            }
         }
-        AttachmentBadges(attachments)
         if (note.tags.isNotEmpty()) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 note.tags.forEach {
@@ -209,6 +226,37 @@ private fun NoteCardBody(note: Note, attachments: List<Attachment>) {
                 }
             }
         }
+    }
+}
+
+/** "⏰ Yarın 09:00" — an active reminder, shown so it's noticed at a glance. */
+@Composable
+private fun ReminderBadge(at: Long, mode: ReminderMode, repeat: ReminderRepeat) {
+    Surface(
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.tertiary,
+        contentColor = MaterialTheme.colorScheme.onTertiary,
+    ) {
+        Row(Modifier.padding(start = 8.dp, end = 10.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                if (mode == ReminderMode.ALARM) Icons.Outlined.Alarm else Icons.Outlined.NotificationsActive,
+                contentDescription = if (mode == ReminderMode.ALARM) "Alarm" else "Hatırlatma",
+                modifier = Modifier.size(14.dp),
+            )
+            Spacer(Modifier.width(4.dp))
+            Text(reminderLabel(at, repeat), style = MaterialTheme.typography.labelMedium, maxLines = 1)
+        }
+    }
+}
+
+private fun daysUntil(at: Long) = ((at - System.currentTimeMillis()) / 86_400_000L + 1).coerceAtLeast(0)
+
+@Composable
+private fun PrivateLine(icon: androidx.compose.ui.graphics.vector.ImageVector, text: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(text, style = MaterialTheme.typography.labelLarge, color = LocalContentColor.current.copy(alpha = 0.8f))
     }
 }
 

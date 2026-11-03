@@ -37,7 +37,19 @@ import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.FilterChip
+import androidx.compose.material.icons.outlined.Speed
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.material3.Text
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
@@ -231,38 +243,73 @@ private fun LevelMeter(levels: List<Float>, modifier: Modifier = Modifier) {
     }
 }
 
-/** Inline player for a recorded or imported audio file. */
+private val Speeds = listOf(1f, 1.25f, 1.5f, 2f)
+
+private fun speedLabel(speed: Float) = if (speed == 1f) "1x" else "${speed.toString().trimEnd('0').trimEnd('.')}x"
+
+/**
+ * Inline player for a recorded or imported audio file: waveform you can tap or drag to seek,
+ * playback speed, and optional skipping of silent stretches.
+ */
 @Composable
 fun AudioPlayer(file: File, label: String, durationMs: Long, modifier: Modifier = Modifier) {
     var player by remember(file) { mutableStateOf<MediaPlayer?>(null) }
     var playing by remember(file) { mutableStateOf(false) }
-    var position by remember(file) { mutableIntStateOf(0) }
+    var position by remember(file) { mutableLongStateOf(0L) }
     var duration by remember(file) { mutableLongStateOf(durationMs) }
-    var dragging by remember { mutableStateOf<Float?>(null) }
+    var speed by rememberSaveable(file.path) { mutableFloatStateOf(1f) }
+    var skipSilence by rememberSaveable(file.path) { mutableStateOf(false) }
+    var skippedMs by remember(file) { mutableLongStateOf(0L) }
+    val profile by produceState<AudioProfile?>(null, file) { value = analyzeAudio(file) }
+    val hasSilence = profile?.silences?.isNotEmpty() == true
 
     DisposableEffect(file) {
         onDispose { player?.release() }
     }
-    LaunchedEffect(playing) {
+
+    // Setting playback params on a paused player starts it on some devices, so only while playing.
+    fun applySpeed(p: MediaPlayer) {
+        runCatching { p.playbackParams = p.playbackParams.setSpeed(speed) }
+    }
+
+    LaunchedEffect(playing, skipSilence, profile) {
         while (playing) {
-            position = player?.currentPosition ?: 0
-            delay(100)
+            val p = player ?: break
+            var pos = p.currentPosition.toLong()
+            if (skipSilence) {
+                profile?.silences?.firstOrNull { pos in it }?.let { gap ->
+                    p.seekTo(gap.last.toInt())
+                    skippedMs += gap.last - pos
+                    pos = gap.last
+                }
+            }
+            position = pos
+            delay(50)
         }
     }
 
+    fun ensurePlayer(): MediaPlayer? = player ?: runCatching {
+        MediaPlayer().apply {
+            setDataSource(file.absolutePath)
+            prepare()
+            setOnCompletionListener { playing = false; position = 0 }
+        }
+    }.getOrNull()?.also {
+        player = it
+        if (duration <= 0) duration = it.duration.toLong()
+    }
+
     fun toggle() {
-        val p = player ?: runCatching {
-            MediaPlayer().apply {
-                setDataSource(file.absolutePath)
-                prepare()
-                setOnCompletionListener { playing = false; position = 0 }
-            }
-        }.getOrNull()?.also {
-            player = it
-            if (duration <= 0) duration = it.duration.toLong()
-        } ?: return
-        if (playing) p.pause() else p.start()
+        val p = ensurePlayer() ?: return
+        if (playing) p.pause() else { p.start(); applySpeed(p) }
         playing = !playing
+    }
+
+    fun seek(fraction: Float) {
+        val p = ensurePlayer() ?: return
+        val target = (fraction.coerceIn(0f, 1f) * duration).toInt()
+        p.seekTo(target)
+        position = target.toLong()
     }
 
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
@@ -279,25 +326,76 @@ fun AudioPlayer(file: File, label: String, durationMs: Long, modifier: Modifier 
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(label, style = MaterialTheme.typography.titleSmall, maxLines = 1)
-            val fraction = if (duration > 0) position / duration.toFloat() else 0f
-            Slider(
-                value = dragging ?: fraction.coerceIn(0f, 1f),
-                onValueChange = { dragging = it },
-                onValueChangeFinished = {
-                    dragging?.let { f ->
-                        val target = (f * duration).toInt()
-                        player?.seekTo(target)
-                        position = target
-                    }
-                    dragging = null
-                },
-                enabled = duration > 0,
-                modifier = Modifier.height(32.dp),
+            Waveform(
+                bars = profile?.bars,
+                progress = if (duration > 0) position / duration.toFloat() else 0f,
+                onSeek = ::seek,
+                modifier = Modifier.fillMaxWidth().height(40.dp).padding(vertical = 4.dp),
             )
-            Text(
-                "${formatDuration(position.toLong())} / ${formatDuration(duration)}",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "${formatDuration(position)} / ${formatDuration(duration)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                if (skipSilence && skippedMs >= 1000) {
+                    Text(
+                        "⏩ ${skippedMs / 1000} sn atlandı",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(end = 6.dp),
+                    )
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                AssistChip(
+                    onClick = {
+                        speed = Speeds[(Speeds.indexOf(speed) + 1) % Speeds.size]
+                        if (playing) player?.let(::applySpeed)
+                    },
+                    label = { Text(speedLabel(speed)) },
+                    leadingIcon = { Icon(Icons.Outlined.Speed, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                )
+                FilterChip(
+                    selected = skipSilence,
+                    onClick = { skipSilence = !skipSilence },
+                    enabled = hasSilence,
+                    label = { Text(if (profile != null && !hasSilence) "Sessizlik yok" else "Sessizliği atla") },
+                )
+            }
+        }
+    }
+}
+
+/** Loudness bars; the played part is in the accent color. Tap or drag to seek. */
+@Composable
+private fun Waveform(bars: FloatArray?, progress: Float, onSeek: (Float) -> Unit, modifier: Modifier = Modifier) {
+    val played = MaterialTheme.colorScheme.primary
+    val rest = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+    var dragging by remember { mutableStateOf<Float?>(null) }
+    val shown = dragging ?: progress
+    Canvas(
+        modifier
+            .pointerInput(Unit) { detectTapGestures { onSeek(it.x / size.width) } }
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures(
+                    onDragEnd = { dragging?.let(onSeek); dragging = null },
+                    onDragCancel = { dragging = null },
+                ) { change, _ -> dragging = (change.position.x / size.width).coerceIn(0f, 1f) }
+            }
+    ) {
+        val count = bars?.size ?: 48
+        val slot = size.width / count
+        for (i in 0 until count) {
+            // Until analysis finishes, show a gentle placeholder wave.
+            val level = bars?.get(i) ?: (0.2f + 0.1f * kotlin.math.sin(i * 0.6f))
+            val h = (level * size.height).coerceAtLeast(3f)
+            drawRoundRect(
+                color = if ((i + 0.5f) / count <= shown) played else rest,
+                topLeft = Offset(i * slot + slot * 0.2f, (size.height - h) / 2),
+                size = Size(slot * 0.6f, h),
+                cornerRadius = CornerRadius(slot * 0.3f),
             )
         }
     }

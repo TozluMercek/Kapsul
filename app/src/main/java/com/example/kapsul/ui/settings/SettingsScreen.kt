@@ -92,13 +92,13 @@ fun SettingsScreen(settingsRepository: SettingsRepository, onBack: () -> Unit) {
                     Spacer(Modifier.height(16.dp))
                     ThemeModeSelector(settings.themeMode, settingsRepository::setThemeMode)
                 }
+                AmoledRow(settings, settingsRepository)
             }
 
             SectionTitle("Renkler")
 
             SettingsCard {
                 ListItem(
-                    headlineContent = { Text("Dinamik renk", style = MaterialTheme.typography.titleMedium) },
                     supportingContent = {
                         Text(
                             if (settingsRepository.dynamicColorSupported) {
@@ -129,7 +129,9 @@ fun SettingsScreen(settingsRepository: SettingsRepository, onBack: () -> Unit) {
                     },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     modifier = Modifier.padding(vertical = 8.dp),
-                )
+                ) {
+                    Text("Dinamik renk", style = MaterialTheme.typography.titleMedium)
+                }
             }
 
             SettingsCard {
@@ -154,6 +156,20 @@ fun SettingsScreen(settingsRepository: SettingsRepository, onBack: () -> Unit) {
                     )
                 }
             }
+
+            SectionTitle("Notlar")
+            SettingsCard { ClipboardRow(settings, settingsRepository) }
+
+            SectionTitle("Bağlam kapsülü")
+            Text(
+                "Yeni bir not yazdığında o anın küçük bir fotoğrafını notun altına ekler. " +
+                    "Yıllar sonra “bunu yazarken neredeydim, ne dinliyordum?” sorusuna yanıt verir.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 8.dp),
+            )
+            SettingsCard { ContextCapsuleSettings(settings, settingsRepository) }
+            Spacer(Modifier.height(24.dp))
         }
     }
 }

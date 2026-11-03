@@ -34,7 +34,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.SheetValue
+import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -72,7 +73,7 @@ fun QuickCaptureSheet(
     onSave: (text: String, source: NoteSource, recording: Pair<File, Long>?) -> Unit,
     onMessage: (String) -> Unit,
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberBottomSheetState(initialValue = SheetValue.Hidden, enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded))
     var text by rememberSaveable { mutableStateOf("") }
     var recording by rememberSaveable { mutableStateOf(startWithVoice) }
     var recorded by remember { mutableStateOf<Pair<File, Long>?>(null) }

@@ -3,6 +3,7 @@ package com.example.kapsul.ui.theme
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.MotionScheme
@@ -25,6 +26,18 @@ private val KapsulShapes = Shapes(
     extraLarge = RoundedCornerShape(36.dp),
 )
 
+/** Black background and surfaces; containers step up in small near-black increments. */
+private fun ColorScheme.toAmoled() = copy(
+    background = Color.Black,
+    surface = Color.Black,
+    surfaceDim = Color.Black,
+    surfaceContainerLowest = Color.Black,
+    surfaceContainerLow = Color(0xFF0A0A0A),
+    surfaceContainer = Color(0xFF111111),
+    surfaceContainerHigh = Color(0xFF181818),
+    surfaceContainerHighest = Color(0xFF202020),
+)
+
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun KapsulTheme(
@@ -34,14 +47,17 @@ fun KapsulTheme(
     // Used when dynamic color is off: the whole scheme is generated from this seed.
     seedColor: Int = DEFAULT_SEED_COLOR,
     paletteStyle: PaletteStyle = PaletteStyle.TonalSpot,
+    // Pure black backgrounds in dark mode; saves power on OLED screens.
+    amoled: Boolean = false,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = if (dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+    val base = if (dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         val context = LocalContext.current
         if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
     } else {
         rememberDynamicColorScheme(seedColor = Color(seedColor), isDark = darkTheme, style = paletteStyle)
     }
+    val colorScheme = if (darkTheme && amoled) base.toAmoled() else base
 
     MaterialExpressiveTheme(
         colorScheme = colorScheme,

@@ -4,7 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import androidx.fragment.app.FragmentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -22,7 +22,8 @@ import com.example.kapsul.ui.LaunchAction
 import com.example.kapsul.ui.onboarding.OnboardingScreen
 import com.example.kapsul.ui.theme.KapsulTheme
 
-class MainActivity : ComponentActivity() {
+// FragmentActivity (a ComponentActivity) because BiometricPrompt needs it for note locks.
+class MainActivity : FragmentActivity() {
     private val viewModel: KapsulViewModel by viewModels()
     private var launchAction by mutableStateOf<LaunchAction?>(null)
 
@@ -53,6 +54,7 @@ class MainActivity : ComponentActivity() {
                 dynamicColor = settings.dynamicColor && settingsRepository.dynamicColorSupported,
                 seedColor = settings.seedColor,
                 paletteStyle = settings.paletteStyle,
+                amoled = settings.amoled,
             ) {
                 if (!settings.onboarded) {
                     OnboardingScreen(onFinish = settingsRepository::setOnboarded)
@@ -65,6 +67,23 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    private var stoppedAt = 0L
+
+    override fun onStop() {
+        super.onStop()
+        if (!isChangingConfigurations) stoppedAt = System.currentTimeMillis()
+    }
+
+    /**
+     * Locked notes need unlocking again after the app has been away for a minute. Not at once:
+     * the camera, file pickers and the scanner also stop this activity while they're open.
+     */
+    override fun onStart() {
+        super.onStart()
+        if (stoppedAt != 0L && System.currentTimeMillis() - stoppedAt > RELOCK_AFTER_MS) viewModel.relockNotes()
+        stoppedAt = 0L
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -86,6 +105,7 @@ class MainActivity : ComponentActivity() {
         const val ACTION_ASK = "com.example.kapsul.action.ASK"
         private const val ACTION_OPEN_NOTE = "com.example.kapsul.action.OPEN_NOTE"
         private const val EXTRA_NOTE_ID = "noteId"
+        private const val RELOCK_AFTER_MS = 60_000L
 
         /** Opens a note, e.g. from a reminder notification. */
         fun openNoteIntent(context: Context, noteId: Long): Intent =

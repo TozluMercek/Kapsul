@@ -84,6 +84,31 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.kapsul.ui.KapsulViewModel
 import com.example.kapsul.ui.components.NoteCard
+import android.content.ClipDescription
+import android.content.ClipboardManager
+import android.content.Context
+import android.os.Build
+import androidx.compose.foundation.layout.Column
+import androidx.compose.material.icons.outlined.ContentPaste
+import androidx.compose.material.icons.automirrored.outlined.DriveFileMove
+import androidx.compose.material.icons.outlined.Menu
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.Surface
+import androidx.compose.material3.rememberDrawerState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.text.style.TextOverflow
+import com.example.kapsul.data.Folder
+import com.example.kapsul.data.SettingsRepository
+import com.example.kapsul.ui.folders.FolderNameDialog
+import com.example.kapsul.ui.folders.FolderPickerDialog
+import com.example.kapsul.ui.folders.KapsulDrawer
+import kotlinx.coroutines.launch
 
 @Composable
 fun HomeScreen(
@@ -93,7 +118,17 @@ fun HomeScreen(
     onQuickCapture: (voice: Boolean) -> Unit,
     onAsk: () -> Unit,
     onSettings: () -> Unit,
+    onTimeline: () -> Unit,
+    onTrash: () -> Unit,
 ) {
+    val folders by vm.folders.collectAsStateWithLifecycle()
+    val selectedFolder by vm.selectedFolder.collectAsStateWithLifecycle()
+    val trash by vm.trash.collectAsStateWithLifecycle()
+    val drawerState = rememberDrawerState(DrawerValue.Closed)
+    val drawerScope = rememberCoroutineScope()
+    var folderDialog by remember { mutableStateOf<FolderDialog?>(null) }
+    var moveDialog by remember { mutableStateOf(false) }
+    val clipboardOffer = rememberClipboardOffer(vm)
     val notes by vm.visibleNotes.collectAsStateWithLifecycle()
     val allNotes by vm.notes.collectAsStateWithLifecycle()
     val tags by vm.tags.collectAsStateWithLifecycle()
@@ -114,103 +149,180 @@ fun HomeScreen(
         selection = if (id in selection) selection - id else selection + id
     }
 
-    Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        topBar = {
-            LargeFlexibleTopAppBar(
-                title = { Text("Kapsül") },
-                subtitle = {
-                    val count = allNotes?.size ?: 0
-                    Text("$count anı")
-                },
-                actions = {
-                    IconButton(onClick = onSettings) {
-                        Icon(Icons.Outlined.Settings, contentDescription = "Ayarlar")
-                    }
-                    FilledTonalIconButton(
-                        onClick = onAsk,
-                        shapes = IconButtonDefaults.shapes(),
-                    ) {
-                        Icon(Icons.Filled.AutoAwesome, contentDescription = "Hafızana sor")
-                    }
-                },
-                scrollBehavior = scrollBehavior,
+    BackHandler(drawerState.isOpen) { drawerScope.launch { drawerState.close() } }
+    fun closeDrawer(then: () -> Unit = {}) {
+        drawerScope.launch { drawerState.close() }
+        then()
+    }
+
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            KapsulDrawer(
+                folders = folders,
+                selectedFolder = selectedFolder,
+                trashCount = trash.size,
+                onAllNotes = { closeDrawer { vm.selectFolder(null) } },
+                onFolder = { folder -> closeDrawer { vm.selectFolder(folder.id) } },
+                onTimeline = { closeDrawer(onTimeline) },
+                onTrash = { closeDrawer(onTrash) },
+                onCreateFolder = { parent -> folderDialog = FolderDialog.Create(parent) },
+                onRename = { folderDialog = FolderDialog.Rename(it) },
+                onDelete = { folderDialog = FolderDialog.Delete(it) },
             )
         },
-        floatingActionButton = {
-            if (!selecting) {
-                CaptureFabMenu(
-                    expanded = fabExpanded,
-                    onExpandedChange = { fabExpanded = it },
-                    onQuickNote = { fabExpanded = false; onQuickCapture(false) },
-                    onVoiceNote = { fabExpanded = false; onQuickCapture(true) },
-                    onNewNote = { fabExpanded = false; onNewNote() },
-                    onAsk = { fabExpanded = false; onAsk() },
+    ) {
+        Scaffold(
+            modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+            topBar = {
+                LargeFlexibleTopAppBar(
+                    title = { Text(folders.firstOrNull { it.id == selectedFolder }?.name ?: "Kapsül") },
+                    subtitle = {
+                        val count = if (selectedFolder != null) notes?.size ?: 0 else allNotes?.size ?: 0
+                        Text("$count anı")
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = { drawerScope.launch { drawerState.open() } }) {
+                            Icon(Icons.Outlined.Menu, contentDescription = "Menü")
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = onSettings) {
+                            Icon(Icons.Outlined.Settings, contentDescription = "Ayarlar")
+                        }
+                        FilledTonalIconButton(
+                            onClick = onAsk,
+                            shapes = IconButtonDefaults.shapes(),
+                        ) {
+                            Icon(Icons.Filled.AutoAwesome, contentDescription = "Hafızana sor")
+                        }
+                    },
+                    scrollBehavior = scrollBehavior,
                 )
-            }
-        },
-    ) { padding ->
-        Box(Modifier.fillMaxSize()) {
-            LazyVerticalStaggeredGrid(
-                columns = StaggeredGridCells.Adaptive(minSize = 160.dp),
-                contentPadding = PaddingValues(
-                    start = 16.dp,
-                    end = 16.dp,
-                    top = padding.calculateTopPadding() + 4.dp,
-                    bottom = padding.calculateBottomPadding() + 120.dp,
-                ),
-                verticalItemSpacing = 12.dp,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.fillMaxSize(),
-            ) {
-                item(span = StaggeredGridItemSpan.FullLine, key = "search") {
-                    SearchField(query, vm::setQuery)
+            },
+            floatingActionButton = {
+                if (!selecting) {
+                    CaptureFabMenu(
+                        expanded = fabExpanded,
+                        onExpandedChange = { fabExpanded = it },
+                        onQuickNote = { fabExpanded = false; onQuickCapture(false) },
+                        onVoiceNote = { fabExpanded = false; onQuickCapture(true) },
+                        onNewNote = { fabExpanded = false; onNewNote() },
+                        onAsk = { fabExpanded = false; onAsk() },
+                    )
                 }
-                if (tags.isNotEmpty()) {
-                    item(span = StaggeredGridItemSpan.FullLine, key = "tags") {
-                        TagFilterRow(tags, selectedTag, vm::selectTag)
+            },
+        ) { padding ->
+            Box(Modifier.fillMaxSize()) {
+                LazyVerticalStaggeredGrid(
+                    columns = StaggeredGridCells.Adaptive(minSize = 160.dp),
+                    contentPadding = PaddingValues(
+                        start = 16.dp,
+                        end = 16.dp,
+                        top = padding.calculateTopPadding() + 4.dp,
+                        bottom = padding.calculateBottomPadding() + 120.dp,
+                    ),
+                    verticalItemSpacing = 12.dp,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    item(span = StaggeredGridItemSpan.FullLine, key = "search") {
+                        SearchField(query, vm::setQuery)
                     }
-                }
-                val current = notes
-                when {
-                    current == null -> item(span = StaggeredGridItemSpan.FullLine, key = "loading") {
-                        Box(Modifier.fillMaxWidth().padding(64.dp), contentAlignment = Alignment.Center) {
-                            LoadingIndicator(Modifier.size(64.dp))
+                    clipboardOffer.text?.let { text ->
+                        item(span = StaggeredGridItemSpan.FullLine, key = "clipboard") {
+                            ClipboardSuggestion(
+                                text = text,
+                                onAdd = { vm.saveClipboard(text); clipboardOffer.dismiss() },
+                                onDismiss = clipboardOffer::dismiss,
+                                modifier = Modifier.animateItem(),
+                            )
                         }
                     }
-                    current.isEmpty() -> item(span = StaggeredGridItemSpan.FullLine, key = "empty") {
-                        EmptyState(searching = query.isNotBlank() || selectedTag != null)
+                    if (tags.isNotEmpty()) {
+                        item(span = StaggeredGridItemSpan.FullLine, key = "tags") {
+                            TagFilterRow(tags, selectedTag, vm::selectTag)
+                        }
                     }
-                    else -> items(current, key = { it.id }) { note ->
-                        NoteCard(
-                            note,
-                            onClick = { if (selecting) toggle(note.id) else onOpenNote(note.id) },
-                            onLongClick = { toggle(note.id) },
-                            selected = note.id in selection,
-                            modifier = Modifier.animateItem(),
-                            attachments = attachments[note.id].orEmpty(),
-                            fileOf = vm.store::file,
-                        )
+                    val current = notes
+                    when {
+                        current == null -> item(span = StaggeredGridItemSpan.FullLine, key = "loading") {
+                            Box(Modifier.fillMaxWidth().padding(64.dp), contentAlignment = Alignment.Center) {
+                                LoadingIndicator(Modifier.size(64.dp))
+                            }
+                        }
+                        current.isEmpty() -> item(span = StaggeredGridItemSpan.FullLine, key = "empty") {
+                            EmptyState(searching = query.isNotBlank() || selectedTag != null)
+                        }
+                        else -> items(current, key = { it.id }) { note ->
+                            NoteCard(
+                                note,
+                                onClick = { if (selecting) toggle(note.id) else onOpenNote(note.id) },
+                                onLongClick = { toggle(note.id) },
+                                selected = note.id in selection,
+                                modifier = Modifier.animateItem(),
+                                attachments = attachments[note.id].orEmpty(),
+                                fileOf = vm.store::file,
+                            )
+                        }
                     }
                 }
-            }
 
-            AnimatedVisibility(
-                visible = selecting,
-                enter = slideInVertically { it } + fadeIn(),
-                exit = slideOutVertically { it } + fadeOut(),
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
-                    .padding(bottom = 24.dp),
-            ) {
-                SelectionBar(
-                    count = selection.size,
-                    onCancel = { selection = emptySet() },
-                    onDelete = { confirmDelete = true },
-                )
+                AnimatedVisibility(
+                    visible = selecting,
+                    enter = slideInVertically { it } + fadeIn(),
+                    exit = slideOutVertically { it } + fadeOut(),
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .navigationBarsPadding()
+                        .padding(bottom = 24.dp),
+                ) {
+                    SelectionBar(
+                        count = selection.size,
+                        onCancel = { selection = emptySet() },
+                        onMove = { moveDialog = true },
+                        onDelete = { confirmDelete = true },
+                    )
+                }
             }
         }
+    }
+
+    if (moveDialog) {
+        FolderPickerDialog(
+            folders = folders,
+            current = selection.singleOrNull()?.let { id -> notes?.firstOrNull { it.id == id }?.folderId },
+            onPick = { folderId ->
+                vm.moveToFolder(selection, folderId)
+                selection = emptySet()
+                moveDialog = false
+            },
+            onDismiss = { moveDialog = false },
+        )
+    }
+
+    when (val dialog = folderDialog) {
+        is FolderDialog.Create -> FolderNameDialog(
+            title = if (dialog.parentId == null) "Yeni klasör" else "Yeni alt klasör",
+            initial = "",
+            onConfirm = { vm.createFolder(it, dialog.parentId); folderDialog = null },
+            onDismiss = { folderDialog = null },
+        )
+        is FolderDialog.Rename -> FolderNameDialog(
+            title = "Klasörü yeniden adlandır",
+            initial = dialog.folder.name,
+            onConfirm = { vm.renameFolder(dialog.folder, it); folderDialog = null },
+            onDismiss = { folderDialog = null },
+        )
+        is FolderDialog.Delete -> AlertDialog(
+            onDismissRequest = { folderDialog = null },
+            icon = { Icon(Icons.Outlined.DeleteOutline, contentDescription = null) },
+            title = { Text("“${dialog.folder.name}” silinsin mi?") },
+            text = { Text("Yalnızca klasör silinir; içindeki notlar ve alt klasörler bir üst seviyeye taşınır.") },
+            confirmButton = { TextButton(onClick = { vm.deleteFolder(dialog.folder); folderDialog = null }) { Text("Sil") } },
+            dismissButton = { TextButton(onClick = { folderDialog = null }) { Text("Vazgeç") } },
+        )
+        null -> Unit
     }
 
     if (confirmDelete) {
@@ -218,8 +330,8 @@ fun HomeScreen(
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
             icon = { Icon(Icons.Outlined.DeleteOutline, contentDescription = null) },
-            title = { Text(if (count == 1) "Not silinsin mi?" else "$count not silinsin mi?") },
-            text = { Text("Ekleri ve bağlantılarıyla birlikte cihazından kalıcı olarak silinir.") },
+            title = { Text(if (count == 1) "Not çöp kutusuna taşınsın mı?" else "$count not çöp kutusuna taşınsın mı?") },
+            text = { Text("30 gün boyunca çöp kutusundan geri yükleyebilirsin.") },
             confirmButton = {
                 TextButton(onClick = {
                     vm.deleteNotes(selection)
@@ -232,8 +344,82 @@ fun HomeScreen(
     }
 }
 
+private sealed interface FolderDialog {
+    data class Create(val parentId: Long?) : FolderDialog
+    data class Rename(val folder: Folder) : FolderDialog
+    data class Delete(val folder: Folder) : FolderDialog
+}
+
+/** Text waiting on the clipboard, offered once per copy. */
+private class ClipboardOffer(private val settings: SettingsRepository) {
+    var text by mutableStateOf<String?>(null)
+        private set
+
+    fun read(context: Context) {
+        val clipboard = context.getSystemService(ClipboardManager::class.java) ?: return
+        val description = clipboard.primaryClipDescription ?: return
+        if (!description.hasMimeType(ClipDescription.MIMETYPE_TEXT_PLAIN) && !description.hasMimeType(ClipDescription.MIMETYPE_TEXT_HTML)) return
+        // Checking the description is silent; only reading the clip shows Android's toast.
+        val stamp = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) description.timestamp else 0L
+        if (stamp != 0L && stamp == settings.lastClipboardSeen) return
+        settings.lastClipboardSeen = stamp
+        val clip = clipboard.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(context)?.toString()?.trim()
+        if (!clip.isNullOrBlank() && clip.length >= 3) text = clip
+    }
+
+    fun dismiss() {
+        text = null
+    }
+}
+
 @Composable
-private fun SelectionBar(count: Int, onCancel: () -> Unit, onDelete: () -> Unit) {
+private fun rememberClipboardOffer(vm: KapsulViewModel): ClipboardOffer {
+    val context = LocalContext.current
+    val settings by vm.settings.settings.collectAsStateWithLifecycle()
+    val offer = remember { ClipboardOffer(vm.settings) }
+    val window = LocalWindowInfo.current
+    // Android 10+ only lets the focused app read the clipboard.
+    LaunchedEffect(settings.clipboardSuggestions) {
+        if (!settings.clipboardSuggestions) {
+            offer.dismiss()
+            return@LaunchedEffect
+        }
+        snapshotFlow { window.isWindowFocused }.collect { focused -> if (focused) offer.read(context) }
+    }
+    return offer
+}
+
+@Composable
+private fun ClipboardSuggestion(text: String, onAdd: () -> Unit, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
+    Surface(
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.ContentPaste, contentDescription = null, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(10.dp))
+                Text("Panodaki metin not olarak eklensin mi?", style = MaterialTheme.typography.titleSmall)
+            }
+            Text(
+                text,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            Row(Modifier.align(Alignment.End).padding(top = 4.dp)) {
+                TextButton(onClick = onDismiss) { Text("Yoksay") }
+                FilledTonalButton(onClick = onAdd) { Text("Not olarak ekle") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SelectionBar(count: Int, onCancel: () -> Unit, onMove: () -> Unit, onDelete: () -> Unit) {
     HorizontalFloatingToolbar(expanded = true) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onCancel) {
@@ -244,8 +430,11 @@ private fun SelectionBar(count: Int, onCancel: () -> Unit, onDelete: () -> Unit)
             Text(
                 "$count seçildi",
                 style = MaterialTheme.typography.titleSmall,
-                modifier = Modifier.padding(horizontal = 12.dp),
+                modifier = Modifier.padding(horizontal = 8.dp),
             )
+            IconButton(onClick = onMove) {
+                Icon(Icons.AutoMirrored.Outlined.DriveFileMove, contentDescription = "Klasöre taşı")
+            }
             Button(
                 onClick = onDelete,
                 shapes = ButtonDefaults.shapes(),

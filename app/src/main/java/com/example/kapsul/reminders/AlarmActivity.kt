@@ -83,6 +83,7 @@ class AlarmActivity : ComponentActivity() {
                 dynamicColor = settings.dynamicColor && app.settings.dynamicColorSupported,
                 seedColor = settings.seedColor,
                 paletteStyle = settings.paletteStyle,
+                amoled = settings.amoled,
             ) {
                 val title by produceState("", noteId) {
                     value = app.repository.get(noteId)?.title?.ifBlank { "Hatırlatma" } ?: "Hatırlatma"

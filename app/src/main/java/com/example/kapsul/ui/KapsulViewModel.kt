@@ -12,6 +12,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.kapsul.KapsulApplication
 import com.example.kapsul.data.Attachment
 import com.example.kapsul.data.AttachmentType
+import com.example.kapsul.data.Folder
 import com.example.kapsul.data.Note
 import com.example.kapsul.data.NoteLink
 import com.example.kapsul.data.NoteSource
@@ -19,6 +20,7 @@ import com.example.kapsul.data.ReminderMode
 import com.example.kapsul.data.ReminderRepeat
 import com.example.kapsul.data.LegacySamples
 import com.example.kapsul.intelligence.Scored
+import com.example.kapsul.capsule.TimeCapsules
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -59,6 +61,8 @@ sealed interface UiEvent {
     /** A quick note was saved; [suggestion] is an older note it looks related to. */
     data class Captured(val note: Note, val suggestion: Note?) : UiEvent
     data class Message(val text: String) : UiEvent
+    /** Notes moved to the trash; the snackbar can undo it. */
+    data class Trashed(val notes: List<Note>) : UiEvent
 }
 
 class KapsulViewModel(application: Application) : AndroidViewModel(application) {
@@ -78,14 +82,37 @@ class KapsulViewModel(application: Application) : AndroidViewModel(application) 
     private val _selectedTag = MutableStateFlow<String?>(null)
     val selectedTag = _selectedTag.asStateFlow()
 
+    // Declared before visibleNotes, which reads them while initializing.
+    val folders: StateFlow<List<Folder>> =
+        repo.folders.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    private val _selectedFolder = MutableStateFlow<Long?>(null)
+    /** Folder shown on the home screen; null for all notes. */
+    val selectedFolder = _selectedFolder.asStateFlow()
+
     val visibleNotes: StateFlow<List<Note>?> =
-        combine(notes, _query, _selectedTag) { all, q, tag ->
+        combine(notes, _query, _selectedTag, _selectedFolder, folders) { all, q, tag, folder, folderList ->
             if (all == null) return@combine null
-            val filtered = if (tag == null) all else all.filter { tag in it.tags }
-            if (q.isBlank()) filtered else ai.search(q, filtered).map { it.item }
+            var filtered = if (tag == null) all else all.filter { tag in it.tags }
+            if (folder != null) {
+                val ids = folderWithDescendants(folder, folderList)
+                filtered = filtered.filter { it.folderId in ids }
+            }
+            if (q.isBlank()) filtered
+            else {
+                val byId = filtered.associateBy { it.id }
+                ai.search(q, searchable(filtered)).mapNotNull { byId[it.item.id] }
+            }
         }
             .flowOn(Dispatchers.Default)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    val trash: StateFlow<List<Note>> =
+        repo.trash.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Locked notes opened with fingerprint / face / PIN during this visit to the app. */
+    var unlockedIds by mutableStateOf(emptySet<Long>())
+        private set
 
     val tags: StateFlow<List<String>> =
         notes.map { list ->
@@ -110,8 +137,126 @@ class KapsulViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             removeLegacySamples()
             store.deleteLegacyPageImages()
+            repo.purgeTrash()
+            openDueCapsules()
         }
     }
+
+    /** Locked and sealed notes are searchable by title only. */
+    private fun searchable(list: List<Note>) = list.map { if (it.isPrivate) it.copy(body = "") else it }
+
+    private fun folderWithDescendants(root: Long, all: List<Folder>): Set<Long> {
+        val result = mutableSetOf(root)
+        var frontier = listOf(root)
+        while (frontier.isNotEmpty()) {
+            frontier = all.filter { it.parentId in frontier && it.id !in result }.map { it.id }
+            result += frontier
+        }
+        return result
+    }
+
+    // ------------------------------------------------------------- folders
+
+    fun selectFolder(id: Long?) {
+        _selectedFolder.value = id
+    }
+
+    fun createFolder(name: String, parentId: Long?) {
+        if (name.isBlank()) return
+        viewModelScope.launch { repo.createFolder(name.trim(), parentId) }
+    }
+
+    fun renameFolder(folder: Folder, name: String) {
+        if (name.isBlank()) return
+        viewModelScope.launch { repo.renameFolder(folder, name.trim()) }
+    }
+
+    fun deleteFolder(folder: Folder) {
+        if (_selectedFolder.value == folder.id) _selectedFolder.value = null
+        viewModelScope.launch { repo.deleteFolder(folder) }
+    }
+
+    fun moveToFolder(ids: Collection<Long>, folderId: Long?) {
+        val targets = ids.toList()
+        viewModelScope.launch {
+            targets.forEach { id -> repo.get(id)?.let { repo.save(it.copy(folderId = folderId)) } }
+            val name = folders.value.firstOrNull { it.id == folderId }?.name ?: "Tüm notlar"
+            _events.emit(UiEvent.Message("“$name” klasörüne taşındı"))
+        }
+    }
+
+    // --------------------------------------------------------------- trash
+
+    fun restore(note: Note) {
+        viewModelScope.launch {
+            repo.restore(note)
+            if ((note.reminderAt ?: 0) > System.currentTimeMillis()) reminders.schedule(note)
+            note.capsuleUntil?.takeIf { note.isSealed }?.let { reminders.scheduleCapsule(note.id, it) }
+        }
+    }
+
+    fun deleteForever(note: Note) {
+        viewModelScope.launch { repo.delete(note) }
+    }
+
+    fun emptyTrash() {
+        viewModelScope.launch { repo.emptyTrash() }
+    }
+
+    // ---------------------------------------------------------------- lock
+
+    fun unlock(id: Long) {
+        unlockedIds = unlockedIds + id
+    }
+
+    fun relockNotes() {
+        unlockedIds = emptySet()
+    }
+
+    fun setLocked(id: Long, locked: Boolean) {
+        viewModelScope.launch { repo.get(id)?.let { repo.save(it.copy(locked = locked)) } }
+        if (locked) unlockedIds = unlockedIds + id
+    }
+
+    // -------------------------------------------------------- time capsule
+
+    /** Seals the note's text until [until]; it can't be read before then. */
+    fun sealCapsule(id: Long, until: Long, draftBody: String) {
+        viewModelScope.launch {
+            val note = repo.get(id) ?: return@launch
+            val sealed = withContext(Dispatchers.Default) { TimeCapsules.seal(note.copy(body = draftBody), until) }
+            repo.save(sealed)
+            reminders.scheduleCapsule(id, until)
+            _events.emit(UiEvent.Message("Zaman kapsülü mühürlendi"))
+        }
+    }
+
+    private suspend fun openDueCapsules() {
+        repo.sealedCapsules().forEach { TimeCapsules.openIfDue(repo, it) }
+    }
+
+    private val capsulePrefs = app.getSharedPreferences("kapsul_capsules", Context.MODE_PRIVATE)
+
+    /** The "your capsule opened" animation plays once per note. */
+    fun shouldCelebrate(note: Note): Boolean =
+        note.capsuleUntil != null && !note.isSealed && !capsulePrefs.getBoolean("seen_${note.id}", false)
+
+    fun markCelebrated(id: Long) = capsulePrefs.edit().putBoolean("seen_$id", true).apply()
+
+    // ------------------------------------------------------------- context
+
+    /** Records the moment around a new note (music, battery, steps, place) as the user allowed. */
+    private fun captureContext(noteId: Long) {
+        viewModelScope.launch {
+            val snapshot = app.contextCollector.capture(settings.settings.value)
+            if (snapshot.isEmpty) return@launch
+            repo.get(noteId)?.let { repo.save(it.copy(context = snapshot.encode())) }
+        }
+    }
+
+    // ----------------------------------------------------------- clipboard
+
+    fun saveClipboard(text: String) = quickCapture(text, NoteSource.TEXT)
 
     fun setQuery(value: String) {
         _query.value = value
@@ -133,7 +278,7 @@ class KapsulViewModel(application: Application) : AndroidViewModel(application) 
             } else {
                 val title = "Sesli not · ${timeLabel()}"
                 val blank = Note(title = title, tags = listOf("ses"), source = NoteSource.VOICE, autoTitle = false)
-                blank.copy(id = repo.create(blank))
+                blank.copy(id = repo.create(blank)).also { captureContext(it.id) }
             }
             if (recording != null) {
                 val (file, duration) = recording
@@ -141,7 +286,7 @@ class KapsulViewModel(application: Application) : AndroidViewModel(application) 
                     Attachment(noteId = note.id, type = AttachmentType.AUDIO, fileName = file.name, label = "Ses kaydı · ${timeLabel()}", durationMs = duration)
                 )
             }
-            val others = repo.all().filter { it.id != note.id }
+            val others = searchable(repo.all().filter { it.id != note.id })
             val suggestion = if (body.isEmpty()) null else withContext(Dispatchers.Default) {
                 ai.related(body, others, limit = 1).firstOrNull()?.item
             }
@@ -226,11 +371,16 @@ class KapsulViewModel(application: Application) : AndroidViewModel(application) 
         )
         val id = repo.create(note)
         linkWikiReferences(id, body)
+        captureContext(id)
         return note.copy(id = id)
     }
 
     fun newNote(onCreated: (Long) -> Unit) {
-        viewModelScope.launch { onCreated(repo.create(Note())) }
+        viewModelScope.launch {
+            val id = repo.create(Note(folderId = _selectedFolder.value))
+            captureContext(id)
+            onCreated(id)
+        }
     }
 
     // ------------------------------------------------------------- editor
@@ -261,6 +411,8 @@ class KapsulViewModel(application: Application) : AndroidViewModel(application) 
 
     private suspend fun persist(id: Long, draft: EditorDraft) {
         val current = repo.get(id) ?: return
+        // A sealed capsule's text must never be written back in plain form.
+        if (current.isSealed || current.deletedAt != null) return
         val autoTitle = draft.title.isBlank()
         val suggested = ai.suggestTitle(draft.body)
         val updated = current.copy(
@@ -308,18 +460,20 @@ class KapsulViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch { repo.get(id)?.let { repo.save(it.copy(background = background)) } }
     }
 
+    /** Moves notes to the trash (kept 30 days); the snackbar offers "Geri al". */
     fun deleteNotes(ids: Collection<Long>) {
         val targets = ids.toList()
         viewModelScope.launch {
-            targets.forEach { id -> reminders.cancel(id); repo.get(id)?.let { repo.delete(it) } }
-            _events.emit(UiEvent.Message(if (targets.size == 1) "Not silindi" else "${targets.size} not silindi"))
+            val trashed = targets.mapNotNull { id ->
+                reminders.cancel(id)
+                reminders.cancelCapsule(id)
+                repo.get(id)?.also { repo.moveToTrash(it) }
+            }
+            _events.emit(UiEvent.Trashed(trashed))
         }
     }
 
-    fun delete(id: Long) {
-        reminders.cancel(id)
-        viewModelScope.launch { repo.get(id)?.let { repo.delete(it) } }
-    }
+    fun delete(id: Long) = deleteNotes(listOf(id))
 
     fun link(a: Long, b: Long) {
         viewModelScope.launch { repo.link(a, b) }
@@ -336,7 +490,7 @@ class KapsulViewModel(application: Application) : AndroidViewModel(application) 
     /** "This note looks related to X — link it?" */
     fun linkSuggestions(id: Long, text: String, linked: List<Note>): List<Scored<Note>> {
         val linkedIds = linked.mapTo(HashSet()) { it.id }
-        val candidates = notes.value.orEmpty().filter {
+        val candidates = searchable(notes.value.orEmpty()).filter {
             it.id != id && it.id !in linkedIds && NoteLink.of(id, it.id) !in dismissedLinks
         }
         return ai.related(text, candidates, limit = 2)
@@ -370,7 +524,7 @@ class KapsulViewModel(application: Application) : AndroidViewModel(application) 
                 SAVE_THAT.containsMatchIn(question) && previousUserMessage != null ->
                     saveReply(previousUserMessage.text, markMessage = previousUserMessage.id)
                 else -> {
-                    val all = repo.all()
+                    val all = searchable(repo.all())
                     val answer = withContext(Dispatchers.Default) { ai.answer(question, all) }
                     delay(350) // let the loading indicator breathe
                     ChatMessage(nextMessageId++, fromUser = false, text = answer.text, sources = answer.sources)

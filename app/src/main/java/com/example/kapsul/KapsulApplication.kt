@@ -1,6 +1,7 @@
 package com.example.kapsul
 
 import android.app.Application
+import com.example.kapsul.capsule.ContextCollector
 import com.example.kapsul.data.AttachmentStore
 import com.example.kapsul.data.KapsulDatabase
 import com.example.kapsul.data.NoteRepository
@@ -17,6 +18,7 @@ class KapsulApplication : Application() {
     val settings by lazy { SettingsRepository(this) }
     val intelligence: NoteIntelligence by lazy { LocalIntelligence() }
     val reminders by lazy { ReminderScheduler(this) }
+    val contextCollector by lazy { ContextCollector(this) }
 
     override fun onCreate() {
         super.onCreate()

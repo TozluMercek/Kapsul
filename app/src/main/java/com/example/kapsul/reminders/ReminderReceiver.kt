@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import com.example.kapsul.KapsulApplication
+import com.example.kapsul.capsule.TimeCapsules
 import com.example.kapsul.data.ReminderMode
 import com.example.kapsul.data.ReminderRepeat
 import kotlinx.coroutines.CoroutineScope
@@ -24,6 +25,17 @@ class ReminderReceiver : BroadcastReceiver() {
                 app.reminders.snooze(noteId, mode)
             }
             ACTION_DISMISS -> ReminderNotifications.dismiss(context, noteId)
+            ACTION_CAPSULE_OPEN -> {
+                val pending = goAsync()
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        val note = app.repository.get(noteId) ?: return@launch
+                        TimeCapsules.openIfDue(app.repository, note)?.let { ReminderNotifications.showCapsuleOpened(context, it) }
+                    } finally {
+                        pending.finish()
+                    }
+                }
+            }
             ACTION_FIRE -> {
                 val snooze = intent.getBooleanExtra(EXTRA_SNOOZE, false)
                 val pending = goAsync()
@@ -53,6 +65,7 @@ class ReminderReceiver : BroadcastReceiver() {
         const val ACTION_FIRE = "com.example.kapsul.reminder.FIRE"
         const val ACTION_SNOOZE = "com.example.kapsul.reminder.SNOOZE"
         const val ACTION_DISMISS = "com.example.kapsul.reminder.DISMISS"
+        const val ACTION_CAPSULE_OPEN = "com.example.kapsul.capsule.OPEN"
         const val EXTRA_NOTE_ID = "noteId"
         const val EXTRA_SNOOZE = "snooze"
         const val EXTRA_MODE = "mode"
@@ -78,6 +91,11 @@ class BootReceiver : BroadcastReceiver() {
                     val updated = note.copy(reminderAt = next)
                     if (next != at) app.repository.save(updated)
                     app.reminders.schedule(updated)
+                }
+                app.repository.sealedCapsules().forEach { note ->
+                    val opened = TimeCapsules.openIfDue(app.repository, note, now)
+                    if (opened != null) ReminderNotifications.showCapsuleOpened(context, opened)
+                    else note.capsuleUntil?.let { app.reminders.scheduleCapsule(note.id, it) }
                 }
             } finally {
                 pending.finish()

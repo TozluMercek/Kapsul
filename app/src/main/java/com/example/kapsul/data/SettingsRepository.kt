@@ -19,6 +19,15 @@ data class AppSettings(
     val paletteStyle: PaletteStyle = PaletteStyle.TonalSpot,
     /** The swipeable introduction has been completed or skipped. */
     val onboarded: Boolean = false,
+    /** Pure black dark theme for OLED screens. */
+    val amoled: Boolean = false,
+    /** Offer to save copied text as a note when the app opens. */
+    val clipboardSuggestions: Boolean = true,
+    /** Context capsule: what to record with each new note. */
+    val contextBattery: Boolean = true,
+    val contextSteps: Boolean = false,
+    val contextMusic: Boolean = false,
+    val contextLocation: Boolean = false,
 )
 
 class SettingsRepository(context: Context) {
@@ -40,6 +49,26 @@ class SettingsRepository(context: Context) {
 
     fun setOnboarded() = update { it.copy(onboarded = true) }
 
+    fun setAmoled(enabled: Boolean) = update { it.copy(amoled = enabled) }
+
+    fun setClipboardSuggestions(enabled: Boolean) = update { it.copy(clipboardSuggestions = enabled) }
+
+    fun setContextBattery(enabled: Boolean) = update { it.copy(contextBattery = enabled) }
+
+    fun setContextSteps(enabled: Boolean) = update { it.copy(contextSteps = enabled) }
+
+    fun setContextMusic(enabled: Boolean) = update { it.copy(contextMusic = enabled) }
+
+    fun setContextLocation(enabled: Boolean) = update { it.copy(contextLocation = enabled) }
+
+    /**
+     * Timestamp of the last clipboard item we looked at, so each copy is read (and Android's
+     * "pasted from clipboard" toast shown) at most once.
+     */
+    var lastClipboardSeen: Long
+        get() = prefs.getLong(KEY_LAST_CLIP, 0L)
+        set(value) = prefs.edit().putLong(KEY_LAST_CLIP, value).apply()
+
     private fun update(transform: (AppSettings) -> AppSettings) {
         val next = transform(_settings.value)
         prefs.edit()
@@ -48,6 +77,12 @@ class SettingsRepository(context: Context) {
             .putInt(KEY_SEED, next.seedColor)
             .putString(KEY_STYLE, next.paletteStyle.name)
             .putBoolean(KEY_ONBOARDED, next.onboarded)
+            .putBoolean(KEY_AMOLED, next.amoled)
+            .putBoolean(KEY_CLIPBOARD, next.clipboardSuggestions)
+            .putBoolean(KEY_CTX_BATTERY, next.contextBattery)
+            .putBoolean(KEY_CTX_STEPS, next.contextSteps)
+            .putBoolean(KEY_CTX_MUSIC, next.contextMusic)
+            .putBoolean(KEY_CTX_LOCATION, next.contextLocation)
             .apply()
         _settings.value = next
     }
@@ -62,6 +97,12 @@ class SettingsRepository(context: Context) {
             ?.let { runCatching { PaletteStyle.valueOf(it) }.getOrNull() }
             ?: PaletteStyle.TonalSpot,
         onboarded = prefs.getBoolean(KEY_ONBOARDED, false),
+        amoled = prefs.getBoolean(KEY_AMOLED, false),
+        clipboardSuggestions = prefs.getBoolean(KEY_CLIPBOARD, true),
+        contextBattery = prefs.getBoolean(KEY_CTX_BATTERY, true),
+        contextSteps = prefs.getBoolean(KEY_CTX_STEPS, false),
+        contextMusic = prefs.getBoolean(KEY_CTX_MUSIC, false),
+        contextLocation = prefs.getBoolean(KEY_CTX_LOCATION, false),
     )
 
     private companion object {
@@ -70,5 +111,12 @@ class SettingsRepository(context: Context) {
         const val KEY_SEED = "seed_color"
         const val KEY_STYLE = "palette_style"
         const val KEY_ONBOARDED = "onboarded"
+        const val KEY_AMOLED = "amoled"
+        const val KEY_CLIPBOARD = "clipboard_suggestions"
+        const val KEY_CTX_BATTERY = "ctx_battery"
+        const val KEY_CTX_STEPS = "ctx_steps"
+        const val KEY_CTX_MUSIC = "ctx_music"
+        const val KEY_CTX_LOCATION = "ctx_location"
+        const val KEY_LAST_CLIP = "last_clipboard_seen"
     }
 }

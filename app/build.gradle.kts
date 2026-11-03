@@ -53,6 +53,7 @@ dependencies {
     implementation(libs.androidx.room.ktx)
     implementation(libs.material.kolor)
     implementation(libs.mlkit.document.scanner)
+    implementation(libs.androidx.biometric)
     ksp(libs.androidx.room.compiler)
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))

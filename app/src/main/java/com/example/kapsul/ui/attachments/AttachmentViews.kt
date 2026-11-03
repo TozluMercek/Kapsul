@@ -300,7 +300,7 @@ fun ImageViewerDialog(file: File, onDismiss: () -> Unit) {
     val bitmap by produceState<ImageBitmap?>(null, file) { value = loadBitmap(file, 3000) }
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
-    val transform = rememberTransformableState { zoom, pan, _ ->
+    val transform = rememberTransformableState { _, zoom, pan, _ ->
         scale = (scale * zoom).coerceIn(1f, 6f)
         offset = if (scale == 1f) Offset.Zero else offset + pan
     }

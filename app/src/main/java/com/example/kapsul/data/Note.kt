@@ -1,5 +1,6 @@
 package com.example.kapsul.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -51,9 +52,35 @@ data class Note(
     val reminderRepeat: String? = null,
     /** Encoded background style (see `NoteBackground`), null for the default. */
     val background: String? = null,
+    /** When the note was moved to the trash; null while it is live. Purged after 30 days. */
+    val deletedAt: Long? = null,
+    /** [Folder] this note lives in; null for the top level. */
+    val folderId: Long? = null,
+    /** Opening the note needs fingerprint / face / device PIN. */
+    @ColumnInfo(defaultValue = "0") val locked: Boolean = false,
+    /** Time capsule: the body is sealed (encrypted) until this time. */
+    val capsuleUntil: Long? = null,
+    /** The sealed body while [capsuleUntil] is in the future (see `CapsuleCrypto`). */
+    val capsuleCipher: String? = null,
+    /** "Context capsule": what was going on when the note was written (see `NoteContext`). */
+    val context: String? = null,
 ) {
     val isBlank: Boolean get() = title.isBlank() && body.isBlank()
+
+    val isSealed: Boolean get() = capsuleCipher != null
+
+    /** Locked and sealed notes stay out of search, "ask" and card previews. */
+    val isPrivate: Boolean get() = locked || isSealed
 }
+
+/** Optional, nestable folders on top of tags. */
+@Entity(tableName = "folders")
+data class Folder(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String,
+    val parentId: Long? = null,
+    val createdAt: Long = System.currentTimeMillis(),
+)
 
 /**
  * Undirected link between two notes. Stored once with [aId] < [bId] so a link

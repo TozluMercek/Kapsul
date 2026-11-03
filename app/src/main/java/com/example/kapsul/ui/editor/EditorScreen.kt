@@ -114,6 +114,20 @@ import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material.icons.automirrored.outlined.DriveFileMove
+import androidx.compose.material.icons.outlined.HourglassTop
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.LockOpen
+import androidx.compose.material3.HorizontalDivider
+import com.example.kapsul.capsule.NoteContext
+import com.example.kapsul.ui.folders.FolderPickerDialog
+import com.example.kapsul.ui.privacy.CapsuleCelebration
+import com.example.kapsul.ui.privacy.CapsuleGate
+import com.example.kapsul.ui.privacy.LockedGate
+import com.example.kapsul.ui.privacy.SealCapsuleDialog
+import com.example.kapsul.ui.privacy.canLockNotes
+import com.example.kapsul.ui.privacy.longDate
+import com.example.kapsul.ui.privacy.rememberAuthenticator
 import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.material.icons.outlined.Alarm
@@ -155,7 +169,13 @@ fun EditorScreen(
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { LoadingIndicator() }
         return
     }
-    EditorContent(note, vm, onBack, onOpenNote)
+    when {
+        // Sealed capsules show only a countdown; nothing can open them early.
+        note.isSealed -> CapsuleGate(note.title.ifBlank { "Zaman kapsülü" }, note.updatedAt, note.capsuleUntil ?: 0L, onBack)
+        note.locked && note.id !in vm.unlockedIds ->
+            LockedGate(note.title.ifBlank { "Kilitli not" }, onUnlock = { vm.unlock(note.id) }, onBack = onBack)
+        else -> EditorContent(note, vm, onBack, onOpenNote)
+    }
 }
 
 @Composable
@@ -175,6 +195,11 @@ private fun EditorContent(
     var deleted by remember { mutableStateOf(false) }
 
     var overflowMenu by remember { mutableStateOf(false) }
+    var sealDialog by remember { mutableStateOf(false) }
+    var folderDialog by remember { mutableStateOf(false) }
+    var celebrate by remember { mutableStateOf(vm.shouldCelebrate(initial)) }
+    val authenticate = rememberAuthenticator()
+    val folders by vm.folders.collectAsStateWithLifecycle()
     var reminderSheet by remember { mutableStateOf(false) }
     var backgroundSheet by remember { mutableStateOf(false) }
     var missingPermissions by remember { mutableStateOf(emptyList<Pair<String, Intent>>()) }
@@ -308,6 +333,34 @@ private fun EditorContent(
                                     leadingIcon = { Icon(Icons.Outlined.DeleteOutline, contentDescription = null) },
                                     onClick = { overflowMenu = false; confirmDelete = true },
                                 )
+                                HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                                DropdownMenuItem(
+                                    text = { Text("Klasöre taşı") },
+                                    leadingIcon = { Icon(Icons.AutoMirrored.Outlined.DriveFileMove, contentDescription = null) },
+                                    onClick = { overflowMenu = false; folderDialog = true },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(if (note?.locked == true) "Kilidi kaldır" else "Notu kilitle") },
+                                    leadingIcon = { Icon(if (note?.locked == true) Icons.Outlined.LockOpen else Icons.Outlined.Lock, contentDescription = null) },
+                                    onClick = {
+                                        overflowMenu = false
+                                        val lock = note?.locked != true
+                                        when {
+                                            lock && !canLockNotes(context) ->
+                                                vm.message("Önce cihazına bir ekran kilidi (PIN, desen ya da şifre) ayarla")
+                                            // Confirm it's really the owner before locking or unlocking.
+                                            else -> authenticate(if (lock) "Notu kilitle" else "Kilidi kaldır") {
+                                                vm.setLocked(id, lock)
+                                                vm.message(if (lock) "Not kilitlendi" else "Kilit kaldırıldı")
+                                            }
+                                        }
+                                    },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Zaman kapsülüne kilitle") },
+                                    leadingIcon = { Icon(Icons.Outlined.HourglassTop, contentDescription = null) },
+                                    onClick = { overflowMenu = false; sealDialog = true },
+                                )
                             }
                         }
                     },
@@ -338,6 +391,26 @@ private fun EditorContent(
                     )
 
                     MetaLine(live ?: initial)
+
+                    (live ?: initial).let { note ->
+                        if (note.capsuleUntil != null && !note.isSealed) {
+                            Text(
+                                "⏳ Zaman kapsülü · ${longDate(note.capsuleUntil)} tarihinde açıldı",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.tertiary,
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                            )
+                        }
+                        NoteContext.decode(note.context)?.describe()?.takeIf { it.isNotEmpty() }?.let { parts ->
+                            // Context capsule: the moment this note was written.
+                            Text(
+                                parts.joinToString("  ·  "),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                            )
+                        }
+                    }
 
                     live?.reminderAt?.let { at ->
                         AssistChip(
@@ -425,6 +498,35 @@ private fun EditorContent(
                 }
             }
         }
+    }
+
+    if (sealDialog) {
+        SealCapsuleDialog(
+            onSeal = { until ->
+                sealDialog = false
+                deleted = true // skip the closing save; the sealed body must not be written back
+                vm.sealCapsule(id, until, body.text)
+                onBack()
+            },
+            onDismiss = { sealDialog = false },
+        )
+    }
+
+    if (folderDialog) {
+        FolderPickerDialog(
+            folders = folders,
+            current = live?.folderId,
+            onPick = { vm.moveToFolder(listOf(id), it); folderDialog = false },
+            onDismiss = { folderDialog = false },
+        )
+    }
+
+    if (celebrate) {
+        CapsuleCelebration(
+            title = initial.title.ifBlank { "Zaman kapsülü" },
+            writtenAt = initial.createdAt,
+            onRead = { vm.markCelebrated(id); celebrate = false },
+        )
     }
 
     if (reminderSheet) {
@@ -547,7 +649,7 @@ private fun EditorContent(
             onDismissRequest = { confirmDelete = false },
             icon = { Icon(Icons.Outlined.DeleteOutline, contentDescription = null) },
             title = { Text("Not silinsin mi?") },
-            text = { Text("Bu not ve bağlantıları cihazından kalıcı olarak silinir.") },
+            text = { Text("Not çöp kutusuna taşınır; 30 gün içinde geri yükleyebilirsin.") },
             confirmButton = {
                 TextButton(onClick = {
                     deleted = true

@@ -37,18 +37,24 @@ import com.example.kapsul.ui.capture.QuickCaptureSheet
 import com.example.kapsul.ui.editor.EditorScreen
 import com.example.kapsul.ui.home.HomeScreen
 import com.example.kapsul.ui.settings.SettingsScreen
+import com.example.kapsul.ui.timeline.TimelineScreen
+import com.example.kapsul.ui.trash.TrashScreen
 import kotlinx.coroutines.launch
 
 sealed interface Screen {
     data object Home : Screen
     data object Ask : Screen
     data object Settings : Screen
+    data object Timeline : Screen
+    data object Trash : Screen
     data class Editor(val id: Long) : Screen
 
     fun encode(): String = when (this) {
         Home -> "home"
         Ask -> "ask"
         Settings -> "settings"
+        Timeline -> "timeline"
+        Trash -> "trash"
         is Editor -> "editor:$id"
     }
 
@@ -56,6 +62,8 @@ sealed interface Screen {
         fun decode(value: String): Screen = when {
             value == "ask" -> Ask
             value == "settings" -> Settings
+            value == "timeline" -> Timeline
+            value == "trash" -> Trash
             value.startsWith("editor:") -> Editor(value.removePrefix("editor:").toLong())
             else -> Home
         }
@@ -114,6 +122,16 @@ fun KapsulApp(vm: KapsulViewModel, launchAction: LaunchAction?, onLaunchActionHa
         vm.events.collect { event ->
             when (event) {
                 is UiEvent.Message -> showMessage(event.text)
+                is UiEvent.Trashed -> scope.launch {
+                    val count = event.notes.size
+                    val result = snackbar.showSnackbar(
+                        message = if (count == 1) "Not çöp kutusuna taşındı" else "$count not çöp kutusuna taşındı",
+                        actionLabel = "Geri al",
+                        withDismissAction = true,
+                        duration = SnackbarDuration.Long,
+                    )
+                    if (result == SnackbarResult.ActionPerformed) event.notes.forEach(vm::restore)
+                }
                 is UiEvent.Captured -> scope.launch {
                     val suggestion = event.suggestion
                     val result = snackbar.showSnackbar(
@@ -163,7 +181,15 @@ fun KapsulApp(vm: KapsulViewModel, launchAction: LaunchAction?, onLaunchActionHa
                     onQuickCapture = { voice -> capture = if (voice) "voice" else "text" },
                     onAsk = { push(Screen.Ask) },
                     onSettings = { push(Screen.Settings) },
+                    onTimeline = { push(Screen.Timeline) },
+                    onTrash = { push(Screen.Trash) },
                 )
+                Screen.Timeline -> TimelineScreen(
+                    vm = vm,
+                    onBack = ::pop,
+                    onOpenNote = { push(Screen.Editor(it)) },
+                )
+                Screen.Trash -> TrashScreen(vm = vm, onBack = ::pop)
                 Screen.Settings -> SettingsScreen(
                     settingsRepository = vm.settings,
                     onBack = ::pop,

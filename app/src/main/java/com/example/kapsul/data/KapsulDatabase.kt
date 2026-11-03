@@ -8,7 +8,7 @@ import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [Note::class, NoteLink::class, Attachment::class], version = 4, exportSchema = false)
+@Database(entities = [Note::class, NoteLink::class, Attachment::class, Folder::class], version = 5, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class KapsulDatabase : RoomDatabase() {
     abstract fun noteDao(): NoteDao
@@ -46,9 +46,25 @@ abstract class KapsulDatabase : RoomDatabase() {
             }
         }
 
+        /** v5 adds trash, folders, note lock, time capsules and the context capsule. */
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `notes` ADD COLUMN `deletedAt` INTEGER")
+                db.execSQL("ALTER TABLE `notes` ADD COLUMN `folderId` INTEGER")
+                db.execSQL("ALTER TABLE `notes` ADD COLUMN `locked` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `notes` ADD COLUMN `capsuleUntil` INTEGER")
+                db.execSQL("ALTER TABLE `notes` ADD COLUMN `capsuleCipher` TEXT")
+                db.execSQL("ALTER TABLE `notes` ADD COLUMN `context` TEXT")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `folders` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`name` TEXT NOT NULL, `parentId` INTEGER, `createdAt` INTEGER NOT NULL)"
+                )
+            }
+        }
+
         fun create(context: Context): KapsulDatabase =
             Room.databaseBuilder(context, KapsulDatabase::class.java, "kapsul.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 .build()
     }
 }

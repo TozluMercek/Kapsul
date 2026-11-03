@@ -86,6 +86,25 @@ object ReminderNotifications {
         runCatching { context.getSystemService(NotificationManager::class.java).notify(id, notification) }
     }
 
+    /** "Zaman Kapsülünüz Açıldı" — tapping it opens the note with the opening animation. */
+    fun showCapsuleOpened(context: Context, note: Note) {
+        val id = notificationId(note.id)
+        val open = PendingIntent.getActivity(
+            context, id, MainActivity.openNoteIntent(context, note.id),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val notification = NotificationCompat.Builder(context, CHANNEL_REMINDERS)
+            .setSmallIcon(R.drawable.ic_stat_reminder)
+            .setContentTitle("Zaman Kapsülünüz Açıldı ⏳")
+            .setContentText("“${note.title.ifBlank { "Kapsül" }}” artık okunabilir. Açmak için dokun.")
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(open)
+            .setAutoCancel(true)
+            .build()
+        runCatching { context.getSystemService(NotificationManager::class.java).notify(id, notification) }
+    }
+
     fun dismiss(context: Context, noteId: Long) =
         context.getSystemService(NotificationManager::class.java).cancel(notificationId(noteId))
 

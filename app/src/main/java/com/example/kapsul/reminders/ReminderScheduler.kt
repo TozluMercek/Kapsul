@@ -33,6 +33,28 @@ class ReminderScheduler(private val context: Context) {
         alarms.cancel(firePending(noteId, snooze = true, ReminderMode.NOTIFICATION))
     }
 
+    /** Opens a time capsule at [at]; wakes the device so the "opened" notification is on time. */
+    fun scheduleCapsule(noteId: Long, at: Long) {
+        val operation = capsulePending(noteId)
+        try {
+            if (canScheduleExact()) alarms.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, operation)
+            else alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, operation)
+        } catch (_: SecurityException) {
+            alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, operation)
+        }
+    }
+
+    fun cancelCapsule(noteId: Long) = alarms.cancel(capsulePending(noteId))
+
+    private fun capsulePending(noteId: Long): PendingIntent = PendingIntent.getBroadcast(
+        context,
+        noteId.toInt() xor CAPSULE_REQUEST_BIT,
+        Intent(context, ReminderReceiver::class.java)
+            .setAction(ReminderReceiver.ACTION_CAPSULE_OPEN)
+            .putExtra(ReminderReceiver.EXTRA_NOTE_ID, noteId),
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+    )
+
     private fun set(noteId: Long, at: Long, mode: ReminderMode, snooze: Boolean) {
         val operation = firePending(noteId, snooze, mode)
         try {
@@ -69,6 +91,9 @@ class ReminderScheduler(private val context: Context) {
     }
 
     companion object {
+        /** Keeps capsule request codes apart from reminder ones (which are noteId * 2 [+ 1]). */
+        private const val CAPSULE_REQUEST_BIT = 0x40000000
+
         fun requestCode(noteId: Long, snooze: Boolean) = noteId.toInt() * 2 + if (snooze) 1 else 0
 
         /** The next occurrence strictly after now for a repeating reminder, or null. */
