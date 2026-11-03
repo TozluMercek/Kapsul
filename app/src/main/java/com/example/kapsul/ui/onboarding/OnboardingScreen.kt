@@ -108,7 +108,7 @@ private val Pages = listOf(
     IntroPage(
         MaterialShapes.Cookie4Sided, Icons.Outlined.Lock,
         "Her şey cihazında",
-        "Kapsül'ün internet izni yok. Notların hiçbir sunucuya gitmez; yalnızca senindir.",
+        "Notların hiçbir sunucuya gitmez; yalnızca senindir. İsteğe bağlı hava durumu dışında Kapsül internete bağlanmaz.",
     ),
 )
 

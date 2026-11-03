@@ -28,6 +28,8 @@ data class AppSettings(
     val contextSteps: Boolean = false,
     val contextMusic: Boolean = false,
     val contextLocation: Boolean = false,
+    /** Off by default: the only feature that goes online (a rounded location to Open-Meteo). */
+    val contextWeather: Boolean = false,
 )
 
 class SettingsRepository(context: Context) {
@@ -61,6 +63,8 @@ class SettingsRepository(context: Context) {
 
     fun setContextLocation(enabled: Boolean) = update { it.copy(contextLocation = enabled) }
 
+    fun setContextWeather(enabled: Boolean) = update { it.copy(contextWeather = enabled) }
+
     /**
      * Timestamp of the last clipboard item we looked at, so each copy is read (and Android's
      * "pasted from clipboard" toast shown) at most once.
@@ -83,6 +87,7 @@ class SettingsRepository(context: Context) {
             .putBoolean(KEY_CTX_STEPS, next.contextSteps)
             .putBoolean(KEY_CTX_MUSIC, next.contextMusic)
             .putBoolean(KEY_CTX_LOCATION, next.contextLocation)
+            .putBoolean(KEY_CTX_WEATHER, next.contextWeather)
             .apply()
         _settings.value = next
     }
@@ -103,6 +108,7 @@ class SettingsRepository(context: Context) {
         contextSteps = prefs.getBoolean(KEY_CTX_STEPS, false),
         contextMusic = prefs.getBoolean(KEY_CTX_MUSIC, false),
         contextLocation = prefs.getBoolean(KEY_CTX_LOCATION, false),
+        contextWeather = prefs.getBoolean(KEY_CTX_WEATHER, false),
     )
 
     private companion object {
@@ -117,6 +123,7 @@ class SettingsRepository(context: Context) {
         const val KEY_CTX_STEPS = "ctx_steps"
         const val KEY_CTX_MUSIC = "ctx_music"
         const val KEY_CTX_LOCATION = "ctx_location"
+        const val KEY_CTX_WEATHER = "ctx_weather"
         const val KEY_LAST_CLIP = "last_clipboard_seen"
     }
 }

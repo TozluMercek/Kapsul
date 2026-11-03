@@ -15,6 +15,7 @@ import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.automirrored.outlined.DirectionsWalk
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.MusicNote
+import androidx.compose.material.icons.outlined.WbSunny
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
@@ -104,6 +105,9 @@ fun ContextCapsuleSettings(settings: AppSettings, repository: SettingsRepository
     val locationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         repository.setContextLocation(granted)
     }
+    val weatherPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        repository.setContextWeather(granted)
+    }
 
     Column {
         SettingRow(
@@ -150,8 +154,20 @@ fun ContextCapsuleSettings(settings: AppSettings, repository: SettingsRepository
                 else repository.setContextLocation(on)
             },
         )
+        HorizontalDivider(Modifier.padding(horizontal = 20.dp))
+        SettingRow(
+            Icons.Outlined.WbSunny,
+            "Hava durumu",
+            "Sıcaklık ve gökyüzü; konum izni gerekir",
+            settings.contextWeather && hasLocation,
+            { on ->
+                if (on && !hasLocation) weatherPermission.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
+                else repository.setContextWeather(on)
+            },
+        )
         Text(
-            "Hava durumu eklenmedi: Kapsül internete hiç bağlanmaz.",
+            "Hava durumu, Kapsül'ün internete bağlanan tek özelliğidir: yalnızca yaklaşık konumun " +
+                "(~1 km) Open-Meteo'ya gönderilir, notların hiçbir zaman cihazdan çıkmaz.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 16.dp),

@@ -2,7 +2,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Local-first: the app requests no INTERNET permission. Notes never leave the device. -->
+    <!-- Local-first: notes never leave the device. The network is used only for the optional
+         weather in the context capsule (off by default), which sends a rounded location to Open-Meteo. -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <!-- Voice recordings attached to notes. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
@@ -18,9 +20,7 @@
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
-    <!-- ML Kit's document scanner merges these in, but the scanner UI runs inside
-         Google Play services; Kapsül itself never needs the network. -->
-    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
+    <!-- ML Kit's document scanner merges this in, but the scanner UI runs inside Google Play services. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
 
     <queries>

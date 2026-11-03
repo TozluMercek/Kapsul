@@ -11,7 +11,7 @@
 [![Android](https://img.shields.io/badge/Android-7.0%2B-3DDC84?logo=android&logoColor=white)](#kurulum)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.2-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
 [![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-Material%203%20Expressive-4285F4?logo=jetpackcompose&logoColor=white)](https://m3.material.io)
-[![İnternet izni yok](https://img.shields.io/badge/İnternet%20izni-yok-00897B)](#gizlilik)
+[![Notlar cihazda kalır](https://img.shields.io/badge/notlar-cihazda%20kal%C4%B1r-00897B)](#gizlilik)
 [![Lisans: MIT](https://img.shields.io/badge/lisans-MIT-blue)](LICENSE)
 [![Son sürüm](https://img.shields.io/github/v/release/TozluMercek/Kapsul?label=s%C3%BCr%C3%BCm&color=F5A65B)](https://github.com/TozluMercek/Kapsul/releases/latest)
 
@@ -27,7 +27,7 @@ Aklına gelen bir fikir, bir sesli not, bir fatura fotoğrafı, taranmış bir b
 **başlıklarını ve etiketlerini kendisi atar**, ilgili notları birbirine bağlar ve "Geçen ay ev tamiri için hangi
 malzemeyi konuşmuştuk?" gibi sorulara notlarının içinden yanıt bulur.
 
-Hepsi **telefonunda** olur: Kapsül'ün internet izni yoktur, notların hiçbir sunucuya gönderilmez.
+Hepsi **telefonunda** olur: notların hiçbir sunucuya gönderilmez. İnternete bağlanan tek özellik, isteğe bağlı hava durumudur.
 
 ## Ekran görüntüleri
 
@@ -81,7 +81,7 @@ Ses dalgası (waveform) üzerinde dokunarak/sürükleyerek gezinme, **1x · 1.25
 - Kilitli ve mühürlü notlar aramaya ve "Hafızana sor"a dahil edilmez.
 
 ### 🌌 Bağlam kapsülü
-Her yeni nota o anın küçük bir fotoğrafı eklenir: 🎵 çalan şarkı, 🔋 pil, 👣 günlük adım, 📍 semt.
+Her yeni nota o anın küçük bir fotoğrafı eklenir: 🎵 çalan şarkı, 🔋 pil, 👣 günlük adım, 📍 semt, ⛅ hava durumu.
 Yıllar sonra "bunu yazarken neredeydim, ne dinliyordum?" sorusuna yanıt verir. Her biri isteğe bağlıdır.
 
 ### 🗂️ Düzen
@@ -101,7 +101,7 @@ Yıllar sonra "bunu yazarken neredeydim, ne dinliyordum?" sorusuna yanıt verir.
 
 | | |
 |---|---|
-| 🌐 İnternet | **Yok.** Manifestte `INTERNET` izni bulunmaz (ML Kit'in eklediği izin bile kaldırıldı). |
+| 🌐 İnternet | Yalnızca isteğe bağlı **hava durumu** için (varsayılan kapalı): [Open-Meteo](https://open-meteo.com)'ya ~1 km'ye yuvarlanmış konum gönderilir. Not içeriği asla gönderilmez. |
 | 💾 Veri | Notlar ve ekler yalnızca uygulamanın özel depolama alanında (Room/SQLite) tutulur. |
 | 🔐 Şifreleme | Zaman kapsülleri, Android Keystore'daki donanım destekli anahtarla AES-256-GCM ile şifrelenir. |
 | 🧠 Zekâ | Başlık, etiket, ilgili not bulma ve arama tamamen cihazda (TF-IDF + kurallar) çalışır. |
@@ -117,7 +117,8 @@ Yıllar sonra "bunu yazarken neredeydim, ne dinliyordum?" sorusuna yanıt verir.
 | `USE_FULL_SCREEN_INTENT` | Kilit ekranında tam ekran alarm | Alarm türü seçilince |
 | `RECEIVE_BOOT_COMPLETED` | Yeniden başlatmadan sonra hatırlatmaları geri kurmak | — |
 | `ACTIVITY_RECOGNITION` | Bağlam kapsülü: adım sayısı (isteğe bağlı) | Ayarlardan açılınca |
-| `ACCESS_COARSE_LOCATION` | Bağlam kapsülü: yaklaşık semt (isteğe bağlı) | Ayarlardan açılınca |
+| `ACCESS_COARSE_LOCATION` | Bağlam kapsülü: yaklaşık semt ve hava durumu (isteğe bağlı) | Ayarlardan açılınca |
+| `INTERNET` | Bağlam kapsülü: hava durumu (isteğe bağlı, yalnızca Open-Meteo) | — |
 | Bildirim erişimi | Bağlam kapsülü: çalan şarkı (isteğe bağlı) — bildirimler okunmaz | Ayarlardan açılınca |
 | Biyometri | Not kilidi | Kilit açılırken |
 
@@ -125,7 +126,7 @@ Yıllar sonra "bunu yazarken neredeydim, ne dinliyordum?" sorusuna yanıt verir.
 
 ## Kurulum
 
-1. [Releases](https://github.com/TozluMercek/Kapsul/releases/latest) sayfasından `Kapsul-v*.apk` dosyasını indir.
+1. [Releases](https://github.com/TozluMercek/Kapsul/releases/latest) sayfasından `Kapsul-v*.apk` dosyasını indir (önerilen). `Kapsul-v*-debug.apk` geliştiriciler içindir: hata ayıklama anahtarıyla imzalıdır, büyüktür ve diğerinin üzerine kurulamaz.
 2. Telefonunda dosyayı aç; gerekirse "bilinmeyen kaynaklardan yükleme" iznini ver.
 3. Android **7.0 (API 24)** veya üzeri gerekir. Belge tarama için Google Play hizmetleri gerekir.
 
@@ -143,6 +144,7 @@ Yıllar sonra "bunu yazarken neredeydim, ne dinliyordum?" sorusuna yanıt verir.
 | Belge tarama | [ML Kit Document Scanner](https://developers.google.com/ml-kit/vision/doc-scanner) | 16.0.0 |
 | Kimlik doğrulama | [AndroidX Biometric](https://developer.android.com/jetpack/androidx/releases/biometric) | 1.1.0 |
 | Yazı tipi | [Google Sans Flex](https://fonts.google.com/specimen/Google+Sans+Flex) (SIL OFL 1.1) | — |
+| Hava durumu | [Open-Meteo](https://open-meteo.com) — API anahtarı gerektirmez, `HttpURLConnection` ile | — |
 | Derleme | Android Gradle Plugin | 9.5.0 |
 
 Platform API'leri: `AlarmManager`, `MediaRecorder` / `MediaPlayer` / `MediaCodec` (ses dalgası çözümleme),
@@ -190,7 +192,6 @@ keyPassword=…
 ## Bilinen sınırlamalar
 
 - Zaman kapsülünün açılış tarihini doğrulayan bir sunucu yoktur; kilit cihaz saatine güvenir.
-- Hava durumu bağlam kapsülüne eklenmedi, çünkü uygulama internete bağlanmaz.
 - "Hafızana sor" bir dil modeli değil, cihaz üstü arama ve alıntılamadır; zekâ katmanı `NoteIntelligence`
   arayüzünün arkasında olduğu için ileride cihaz üstü bir modelle değiştirilebilir.
 
