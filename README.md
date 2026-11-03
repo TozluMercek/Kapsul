@@ -39,7 +39,7 @@ Hepsi **telefonunda** olur: notların hiçbir sunucuya gönderilmez. İnternete 
   </tr>
   <tr>
     <td align="center"><img src="docs/screenshots/06-alarm-bildirimi.png" width="200" /><br /><sub>Alarm bildirimi</sub></td>
-    <td align="center"><img src="docs/screenshots/07-arka-plan.png" width="200" /><br /><sub>Gradyan arka plan</sub></td>
+    <td align="center"><img src="docs/screenshots/07-zaman-cizelgesi.png" width="200" /><br /><sub>Zaman çizelgesi</sub></td>
     <td align="center"><img src="docs/screenshots/09-zaman-kapsulu.png" width="200" /><br /><sub>Zaman kapsülü</sub></td>
     <td align="center"><img src="docs/screenshots/10-renk-paleti.png" width="200" /><br /><sub>44 renk paleti</sub></td>
   </tr>
@@ -125,7 +125,7 @@ Yıllar sonra "bunu yazarken neredeydim, ne dinliyordum?" sorusuna yanıt verir.
 
 ## Kurulum
 
-1. [Releases](https://github.com/TozluMercek/Kapsul/releases/latest) sayfasından `Kapsul-v*.apk` dosyasını indir (önerilen). `Kapsul-v*-debug.apk` geliştiriciler içindir: hata ayıklama anahtarıyla imzalıdır, büyüktür ve diğerinin üzerine kurulamaz.
+1. [Releases](https://github.com/TozluMercek/Kapsul/releases/latest) sayfasından telefonuna uygun APK'yı indir. Emin değilsen `universal` olanı seç; günümüz telefonlarının çoğu için `arm64-v8a` yeterlidir (`armeabi-v7a` eski 32 bit telefonlar, `x86` / `x86_64` emülatör ve bazı tabletler içindir).
 2. Telefonunda dosyayı aç; gerekirse "bilinmeyen kaynaklardan yükleme" iznini ver.
 3. Android **7.0 (API 24)** veya üzeri gerekir. Belge tarama için Google Play hizmetleri gerekir.
 
