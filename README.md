@@ -11,7 +11,6 @@
 [![Android](https://img.shields.io/badge/Android-7.0%2B-3DDC84?logo=android&logoColor=white)](#kurulum)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.2-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
 [![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-Material%203%20Expressive-4285F4?logo=jetpackcompose&logoColor=white)](https://m3.material.io)
-[![Notlar cihazda kalır](https://img.shields.io/badge/notlar-cihazda%20kal%C4%B1r-00897B)](#gizlilik)
 [![Lisans: MIT](https://img.shields.io/badge/lisans-MIT-blue)](LICENSE)
 [![Son sürüm](https://img.shields.io/github/v/release/TozluMercek/Kapsul?label=s%C3%BCr%C3%BCm&color=F5A65B)](https://github.com/TozluMercek/Kapsul/releases/latest)
 
